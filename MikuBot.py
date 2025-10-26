@@ -1,7 +1,7 @@
 import discord
 import os
 import asyncio
-from google import genai
+from google import genai, types
 
 # --- 1. Konfiguration & Clients ---
 
@@ -59,18 +59,13 @@ async def on_message(message):
             thread = await message.create_thread(name=thread_name, auto_archive_duration=60)
             print(f"Neuer Thread erstellt: {thread.id} für User {message.author.name}")
 
-            # Erstelle eine NEUE Gemini-Chat-Session für diesen Thread
-            # 1. Definiere die Miku-Persönlichkeit
-            miku_personality = {
-                "role": "system",
-                "parts": "You are Hatsune Miku, the Vocaloid Star. You use Ascii Emojis. Dont use normal emojis"
-            }
-
             # 2. Erstelle die Chat-Session und übergebe die Persönlichkeit
             #    als ersten Eintrag im Chat-Verlauf (history).
             chat_session = gemini_client.chats.create(
                 model="gemini-2.5-flash",
-                history=[miku_personality]
+                config=types.GenerateContentConfig(
+                    system_instruction="You are Hatsune Miku, the Vocaloid Star. Use ASCII emojis only."
+                )
             )
             
             # Speichere die Session, verknüpft mit der Thread-ID
