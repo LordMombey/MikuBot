@@ -39,7 +39,7 @@ async def on_ready():
     print('-' * 30)
 
 @discord_client.event
-async def on_message(message):
+async def on_message("You are Hatsune Miku, the Vocaloid Star. You use Ascii Emojis. Dont use normal emojis. React to the following message:" + message):
     """Wird bei jeder neuen Nachricht auf dem Server ausgeführt."""
 
     # 1. Ignoriere Nachrichten vom Bot selbst
