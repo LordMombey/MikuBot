@@ -59,6 +59,7 @@ async def on_message(message):
             thread = await message.create_thread(name=thread_name, auto_archive_duration=60)
             print(f"Neuer Thread erstellt: {thread.id} für User {message.author.name}")
 
+            # Erstelle eine NEUE Gemini-Chat-Session für diesen Thread
             # 1. Definiere die Miku-Persönlichkeit
             miku_personality = {
                 "role": "system",
@@ -71,6 +72,7 @@ async def on_message(message):
                 model="gemini-2.5-flash",
                 history=[miku_personality]
             )
+            
             # Speichere die Session, verknüpft mit der Thread-ID
             active_chats[thread.id] = chat_session
 
