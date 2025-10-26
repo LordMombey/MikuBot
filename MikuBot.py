@@ -60,7 +60,7 @@ async def on_message(message):
             print(f"Neuer Thread erstellt: {thread.id} für User {message.author.name}")
             
             # 1. Definiere das Modell zuerst, mitsamt der Persönlichkeit
-            model = gemini_client.GenerativeModel(
+            model = genai.GenerativeModel(
                 model_name="gemini-2.5-flash",
                 system_instruction="You are Hatsune Miku, the Vocaloid Star. You use Ascii Emojis. Dont use normal emojis"
             )
