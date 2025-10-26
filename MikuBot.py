@@ -58,15 +58,10 @@ async def on_message(message):
                 
             thread = await message.create_thread(name=thread_name, auto_archive_duration=60)
             print(f"Neuer Thread erstellt: {thread.id} für User {message.author.name}")
-            
-            # 1. Definiere das Modell zuerst, mitsamt der Persönlichkeit
-            model = genai.GenerativeModel(
-                model_name="gemini-2.5-flash",
-                system_instruction="You are Hatsune Miku, the Vocaloid Star. You use Ascii Emojis. Dont use normal emojis"
-            )
 
-            # 2. Starte die Chat-Session von diesem spezifischen Modell
-            chat_session = model.start_chat()
+            # Erstelle eine NEUE Gemini-Chat-Session für diesen Thread
+            chat_session = gemini_client.chats.create(model="gemini-2.5-flash")
+            
             # Speichere die Session, verknüpft mit der Thread-ID
             active_chats[thread.id] = chat_session
 
