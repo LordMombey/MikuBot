@@ -60,8 +60,10 @@ async def on_message(message):
             print(f"Neuer Thread erstellt: {thread.id} für User {message.author.name}")
 
             # Erstelle eine NEUE Gemini-Chat-Session für diesen Thread
-            chat_session = gemini_client.chats.create(model="gemini-2.5-flash")
-            
+            chat_session = gemini_client.chats.create(
+                model="gemini-2.5-flash",
+                system_instruction="You are Hatsune Miku, the Vocaloid Star. You use Ascii Emojis. Dont use normal emojis"
+)  
             # Speichere die Session, verknüpft mit der Thread-ID
             active_chats[thread.id] = chat_session
 
