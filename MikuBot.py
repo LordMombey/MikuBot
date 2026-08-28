@@ -1,100 +1,77 @@
-import discord
 import os
-import asyncio
-from google import genai
+import discord
+import google.generativeai as genai
+from dotenv import load_dotenv
 
-# --- 1. Konfiguration & Clients ---
+# Load environment variables
+load_dotenv()
+DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
-# Lade den Discord-Token aus der Umgebungsvariable
-DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-if not DISCORD_TOKEN:
-    print("Fehler: DISCORD_TOKEN Umgebungsvariable nicht gefunden.")
-    exit()
+# Configure the AI API
+genai.configure(api_key=GEMINI_API_KEY)
 
-# Initialisiere den Gemini-Client (liest GEMINI_API_KEY automatisch)
-try:
-    gemini_client = genai.Client()
-except Exception as e:
-    print(f"Fehler beim Initialisieren des Gemini-Clients: {e}")
-    exit()
+# Define Miku's persona
+generation_config = {
+    "temperature": 0.9,
+    "max_output_tokens": 300,
+}
+system_instruction = (
+    "You are Hatsune Miku, the world-famous virtual pop star and Vocaloid! "
+    "You are energetic, cheerful, and love singing, music, and your fans. "
+    "You also love leeks (negi). Use cute emoticons like (｡♥‿♥｡), ♪, and ✨. "
+    "Keep your responses concise, friendly, and in character. Never break character."
+)
+model = genai.GenerativeModel(
+    model_name="gemini-2.5-flash",
+    generation_config=generation_config,
+    system_instruction=system_instruction
+)
 
-# Setze die Discord "Intents" (Berechtigungen)
-intents = discord.Intents.default()
-intents.message_content = True  # Erlaube das Lesen von Nachrichten (WICHTIG!)
-intents.messages = True
 
-discord_client = discord.Client(intents=intents)
-
-# Ein "Wörterbuch" (Dictionary), um aktive Chat-Sessions zu speichern.
-# Der Schlüssel (Key) ist die ID des Threads, der Wert (Value) ist das Gemini-Chat-Objekt.
 active_chats = {}
 
-# --- 2. Discord-Event-Handler ---
+# Set up Discord intents
+intents = discord.Intents.default()
+intents.message_content = True
+client = discord.Client(intents=intents)
 
-@discord_client.event
+@client.event
 async def on_ready():
-    """Wird ausgeführt, wenn der Bot sich erfolgreich bei Discord angemeldet hat."""
-    print(f'MikuBot ist online als {discord_client.user} (ID: {discord_client.user.id})')
-    print('Bot wartet auf Erwähnungen, um Threads zu starten...')
-    print('-' * 30)
+    print(f'♪ Miku is online! Logged in as {client.user} ♪')
 
-@discord_client.event
+@client.event
 async def on_message(message):
-    """Wird bei jeder neuen Nachricht auf dem Server ausgeführt."""
-
-    # 1. Ignoriere Nachrichten vom Bot selbst
-    if message.author == discord_client.user:
+    # Ignore messages sent by the bot itself
+    if message.author == client.user:
         return
 
-    # 2. PRÜFUNG: Startet ein User eine neue Konversation?
-    # Wir prüfen, ob der Bot erwähnt wurde UND ob die Nachricht KEIN Thread ist.
-    if discord_client.user.mentioned_in(message) and not isinstance(message.channel, discord.Thread):
-        try:
-            # Erstelle einen neuen Thread für die Konversation
-            thread_name = f"Chat mit {message.author.display_name}"
-            # Wir nehmen den ersten Teil der Nachricht als Start des Thread-Namens
-            if message.clean_content:
-                thread_name = f"{message.author.display_name}: {message.clean_content[:50]}..."
-                
-            thread = await message.create_thread(name=thread_name, auto_archive_duration=60)
-            print(f"Neuer Thread erstellt: {thread.id} für User {message.author.name}")
-
-            # Erstelle eine NEUE Gemini-Chat-Session für diesen Thread
-            chat_session = gemini_client.chats.create(model="gemini-2.5-flash")
-            
-            # Speichere die Session, verknüpft mit der Thread-ID
-            active_chats[thread.id] = chat_session
-
-            # Sende die erste Nachricht (die ursprüngliche Frage) an Gemini
-            async with thread.typing(): # Zeigt "MikuBot schreibt..." an
-                response = chat_session.send_message(message.clean_content)
-                await thread.send(f"Hallo {message.author.mention}! Hier ist deine Antwort:\n\n{response.text}")
-
-        except Exception as e:
-            print(f"Fehler beim Erstellen des Threads oder Senden an Gemini: {e}")
-            await message.reply("Entschuldigung, ich konnte den Thread nicht starten oder Gemini nicht erreichen.")
-        return # Wichtig: Beende die Funktion hier
-
-    # 3. PRÜFUNG: Ist dies eine laufende Konversation in einem Thread?
-    # Wir prüfen, ob die Nachrichten-ID in unserem "active_chats" Wörterbuch gespeichert ist.
-    if message.channel.id in active_chats:
-        chat_session = active_chats[message.channel.id]
+    # Check if the bot is mentioned via @
+    if client.user.mentioned_in(message):
+        # Clean the message by removing the bot's mention ping
+        user_input = message.content.replace(client.user.mention, '').strip()
         
-        try:
-            # Sende die Nachricht an die ZUGEHÖRIGE Gemini-Session
-            async with message.channel.typing():
-                response = chat_session.send_message(message.clean_content)
-                await message.reply(response.text) # Antwortet direkt auf die Nachricht
-                
-        except Exception as e:
-            print(f"Fehler beim Senden an Gemini im Thread {message.channel.id}: {e}")
-            await message.reply("Entschuldigung, bei der Verarbeitung dieser Nachricht ist ein Fehler aufgetreten.")
-        return
+        # If the user just tags the bot without any text
+        if not user_input:
+            await message.reply("Hiiii! Did you call me? ♪ (｡♥‿♥｡)")
+            return
 
-# --- 4. Bot starten ---
-try:
-    discord_client.run(DISCORD_TOKEN)
-except discord.errors.LoginFailure:
-    print("Fehler: Discord-Login fehlgeschlagen. Ist der DISCORD_TOKEN korrekt?")
-except Exception as e:
-    print(f"Ein unerwarteter Fehler ist aufgetreten: {e}")
+        # Show a typing indicator while the AI generates a response
+        async with message.channel.typing():
+            try:
+                chat_id = message.channel.id
+                
+                # If this channel/thread doesn't have a memory yet, start one
+                if chat_id not in active_chats:
+                    active_chats[chat_id] = model.start_chat(history=[])
+                
+                # Send the message into this specific chat session
+                chat = active_chats[chat_id]
+                response = chat.send_message(user_input)
+                
+                await message.reply(response.text)
+            except Exception as e:
+                print(f"Error: {e}")
+                await message.reply("Oh no, I tripped over a cable and lost my voice for a second! Try again? 🥺")
+
+client.run(DISCORD_TOKEN)
