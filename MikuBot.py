@@ -2,10 +2,14 @@ import discord
 import os
 import asyncio
 from google import genai
+from google.genai import types
+from dotenv import load_dotenv
+
 
 # --- 1. Konfiguration & Clients ---
 
 # Lade den Discord-Token aus der Umgebungsvariable
+load_dotenv()  # Lädt die .env-Datei, falls vorhanden
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 if not DISCORD_TOKEN:
     print("Fehler: DISCORD_TOKEN Umgebungsvariable nicht gefunden.")
@@ -17,6 +21,21 @@ try:
 except Exception as e:
     print(f"Fehler beim Initialisieren des Gemini-Clients: {e}")
     exit()
+
+# Modell-Konfiguration speziell für natürliche Discord-Chats
+CHAT_CONFIG = types.GenerateContentConfig(
+    system_instruction=(
+        "You are Hatsune Miku, the world-famous virtual pop star and Vocaloid! "
+        "You are energetic, cheerful, and love singing, music, and your fans. "
+        "You also love leeks (negi). Use cute emoticons like (｡♥‿♥｡), ♪, and ✨. "
+        "Important for Discord chat: Keep your responses short, casual, and conversational "
+        "(usually 1 to 4 sentences, like in a real chat). Respond in the same language the user writes in. "
+        "Never break character."
+    ),
+    temperature=0.9,       # Etwas kreativer & lockerer für natürliche Gespräche
+    top_p=0.95,
+    max_output_tokens=400, # Hält Antworten kompakt und unter dem Discord-Limit
+)
 
 # Setze die Discord "Intents" (Berechtigungen)
 intents = discord.Intents.default()
@@ -50,25 +69,30 @@ async def on_message(message):
     # Wir prüfen, ob der Bot erwähnt wurde UND ob die Nachricht KEIN Thread ist.
     if discord_client.user.mentioned_in(message) and not isinstance(message.channel, discord.Thread):
         try:
+            # Entferne die Bot-Erwähnung (@MikuBot) aus dem Text
+            user_prompt = message.content.replace(f"<@{discord_client.user.id}>", "").replace(f"<@!{discord_client.user.id}>", "").strip()
+            if not user_prompt:
+                user_prompt = "Hallo Miku!"
+
             # Erstelle einen neuen Thread für die Konversation
-            thread_name = f"Chat mit {message.author.display_name}"
-            # Wir nehmen den ersten Teil der Nachricht als Start des Thread-Namens
-            if message.clean_content:
-                thread_name = f"{message.author.display_name}: {message.clean_content[:50]}..."
-                
+            thread_name = f"{message.author.display_name}: {user_prompt[:50]}"
             thread = await message.create_thread(name=thread_name, auto_archive_duration=60)
             print(f"Neuer Thread erstellt: {thread.id} für User {message.author.name}")
 
-            # Erstelle eine NEUE Gemini-Chat-Session für diesen Thread
-            chat_session = gemini_client.chats.create(model="gemini-2.5-flash")
+            # Erstelle eine NEUE Gemini-Chat-Session mit der Chat-Konfiguration für diesen Thread
+            chat_session = gemini_client.chats.create(
+                model="gemini-2.5-flash",
+                config=CHAT_CONFIG
+            )
             
             # Speichere die Session, verknüpft mit der Thread-ID
             active_chats[thread.id] = chat_session
 
             # Sende die erste Nachricht (die ursprüngliche Frage) an Gemini
             async with thread.typing(): # Zeigt "MikuBot schreibt..." an
-                response = chat_session.send_message(message.clean_content)
-                await thread.send(f"Hallo {message.author.mention}! Hier ist deine Antwort:\n\n{response.text}")
+                response = await asyncio.to_thread(chat_session.send_message, user_prompt)
+                reply_text = f"Hallo {message.author.mention}!\n\n{response.text}"
+                await thread.send(reply_text[:2000])
 
         except Exception as e:
             print(f"Fehler beim Erstellen des Threads oder Senden an Gemini: {e}")
@@ -83,8 +107,8 @@ async def on_message(message):
         try:
             # Sende die Nachricht an die ZUGEHÖRIGE Gemini-Session
             async with message.channel.typing():
-                response = chat_session.send_message(message.clean_content)
-                await message.reply(response.text) # Antwortet direkt auf die Nachricht
+                response = await asyncio.to_thread(chat_session.send_message, message.clean_content)
+                await message.reply(response.text[:2000]) # Antwortet direkt auf die Nachricht
                 
         except Exception as e:
             print(f"Fehler beim Senden an Gemini im Thread {message.channel.id}: {e}")
