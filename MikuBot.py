@@ -81,7 +81,7 @@ async def on_message(message):
 
             # Erstelle eine NEUE Gemini-Chat-Session mit der Chat-Konfiguration für diesen Thread
             chat_session = gemini_client.chats.create(
-                model="gemini-2.5-flash",
+                model="gemini-3.5-flash-lite",
                 config=CHAT_CONFIG
             )
             
